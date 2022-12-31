@@ -24,10 +24,10 @@ import (
 const redirectURI = "https://rohitk09-ominous-fortnight-pxrpv57pp37995-8080.preview.app.github.dev/callback"
 
 var (
-	auth = spotifyauth.New(spotifyauth.WithRedirectURL(redirectURI), spotifyauth.WithScopes(spotifyauth.ScopeUserLibraryRead),
+	auth = spotifyauth.New(spotifyauth.WithRedirectURL(redirectURI), spotifyauth.WithScopes(spotifyauth.ScopeUserLibraryRead, spotifyauth.ScopePlaylistModifyPrivate),
 		spotifyauth.WithClientID("e4c1c75083a246c8ba25251748f6f392"), spotifyauth.WithClientSecret("86e63ed00e414b91b11e26eafdb8657f"))
-	ch    = make(chan *spotify.Client)
-	state = "abc123"
+	ch       = make(chan *spotify.Client)
+	state    = "abc123"
 	maxLimit = 50
 )
 
@@ -73,13 +73,30 @@ func completeAuth(w http.ResponseWriter, r *http.Request) {
 	client := spotify.New(auth.Client(r.Context(), tok))
 	fmt.Fprintf(w, "Login Completed!")
 
-	
-	res, err := client.CurrentUsersTracks(context.Background(), spotify.Limit(maxLimit))
+	res, _ := client.CurrentUsersTracks(context.Background(), spotify.Limit(maxLimit))
+	prevOffset := res.Offset
+	//keep getting on data till there are more pages of data
+	for res.Next != "" {
+		res, _ = client.CurrentUsersTracks(context.Background(), spotify.Limit(maxLimit), spotify.Offset(prevOffset))
+		prevOffset = res.Offset + len(res.Tracks)
+	}
+	createPlayList(client, res.Tracks[0])
+	ch <- client
+}
+
+func createPlayList(client *spotify.Client, track spotify.SavedTrack) {
+	res, err := client.CreatePlaylistForUser(context.Background(), "12153283982", "test", "", false, false)
 	if err != nil {
 		print(err.Error())
 	}
-	for _, s := range res.Tracks {
-		fmt.Println(s.Artists[0].ID)
-	}
-	ch <- client
+	print(res.Name)
 }
+
+// # Not helpful as most genre objects were just empty
+// func getGenreForTrack(track spotify.SavedTrack, client spotify.Client) {
+// 	fmt.Println("genre called with "+ track.Album.ID.String())
+// 	res, err := client.GetAlbum(context.Background(), track.Album.ID,)
+// 	if err != nil {
+// 		print("error in gettng genre {} due to error=" + err.Error())
+// 	}
+// }

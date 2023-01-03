@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 
@@ -79,13 +80,29 @@ func completeAuth(w http.ResponseWriter, r *http.Request) {
 	for res.Next != "" {
 		res, _ = client.CurrentUsersTracks(context.Background(), spotify.Limit(maxLimit), spotify.Offset(prevOffset))
 		prevOffset = res.Offset + len(res.Tracks)
+		createDictBasedOnYear(res.Tracks)
 	}
-	createPlayList(client, res.Tracks[0])
+
 	ch <- client
 }
 
-func createPlayList(client *spotify.Client, track spotify.SavedTrack) {
+func createDictBasedOnYear(tracks []spotify.SavedTrack) map[string][]string {
+	tracksByYear := make(map[string][]string)
+	for _, track := range tracks {
+		addedTime, _ := time.Parse(spotify.TimestampLayout, track.AddedAt)
+		tracksByYear[fmt.Sprint((addedTime.Year()))] = append(tracksByYear[track.AddedAt], track.ID.String())
+	}
+	return tracksByYear
+}
+
+// to do task:-> look at go for each to parse through whole list ->
+// map year -> track Array.
+// then iterate over the map.
+// add song in new playlist for each user.
+func createPlayListBasedOnYear(client *spotify.Client, track spotify.SavedTrack) {
 	res, err := client.CreatePlaylistForUser(context.Background(), "12153283982", "test", "", false, false)
+
+	client.AddTracksToPlaylist(context.Background(), res.ID, track.ID)
 	if err != nil {
 		print(err.Error())
 	}

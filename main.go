@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/samber/lo"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 
 	"github.com/zmb3/spotify/v2"
@@ -25,7 +26,7 @@ import (
 const redirectURI = "https://rohitk09-ominous-fortnight-pxrpv57pp37995-8080.preview.app.github.dev/callback"
 
 var (
-	auth = spotifyauth.New(spotifyauth.WithRedirectURL(redirectURI), spotifyauth.WithScopes(spotifyauth.ScopeUserLibraryRead, spotifyauth.ScopePlaylistModifyPrivate),
+	auth = spotifyauth.New(spotifyauth.WithRedirectURL(redirectURI), spotifyauth.WithScopes(spotifyauth.ScopeUserLibraryRead, spotifyauth.ScopePlaylistModifyPrivate, spotifyauth.ScopePlaylistReadPrivate),
 		spotifyauth.WithClientID("e4c1c75083a246c8ba25251748f6f392"), spotifyauth.WithClientSecret("86e63ed00e414b91b11e26eafdb8657f"))
 	ch       = make(chan *spotify.Client)
 	state    = "abc123"
@@ -74,23 +75,31 @@ func completeAuth(w http.ResponseWriter, r *http.Request) {
 	client := spotify.New(auth.Client(r.Context(), tok))
 	fmt.Fprintf(w, "Login Completed!")
 
-	res, _ := client.CurrentUsersTracks(context.Background(), spotify.Limit(maxLimit))
+	res, err := client.CurrentUsersTracks(context.Background(), spotify.Limit(maxLimit))
+	if err != nil {
+		fmt.Print(err)
+	}
 	prevOffset := res.Offset
 	//keep getting on data till there are more pages of data
+	songDict := make(map[string][]spotify.ID)
+
 	for res.Next != "" {
 		res, _ = client.CurrentUsersTracks(context.Background(), spotify.Limit(maxLimit), spotify.Offset(prevOffset))
 		prevOffset = res.Offset + len(res.Tracks)
-		createDictBasedOnYear(res.Tracks)
+		songDict = lo.Assign(appendDictBasedOnYear(res.Tracks), songDict)
 	}
-
+	for k, v := range songDict {
+		createPlayListBasedOnYear(client, v, k)
+	}
 	ch <- client
+
 }
 
-func createDictBasedOnYear(tracks []spotify.SavedTrack) map[string][]string {
-	tracksByYear := make(map[string][]string)
+func appendDictBasedOnYear(tracks []spotify.SavedTrack) map[string][]spotify.ID {
+	tracksByYear := make(map[string][]spotify.ID)
 	for _, track := range tracks {
 		addedTime, _ := time.Parse(spotify.TimestampLayout, track.AddedAt)
-		tracksByYear[fmt.Sprint((addedTime.Year()))] = append(tracksByYear[track.AddedAt], track.ID.String())
+		tracksByYear[fmt.Sprint((addedTime.Year()))] = append(tracksByYear[track.AddedAt], track.ID)
 	}
 	return tracksByYear
 }
@@ -99,10 +108,13 @@ func createDictBasedOnYear(tracks []spotify.SavedTrack) map[string][]string {
 // map year -> track Array.
 // then iterate over the map.
 // add song in new playlist for each user.
-func createPlayListBasedOnYear(client *spotify.Client, track spotify.SavedTrack) {
-	res, err := client.CreatePlaylistForUser(context.Background(), "12153283982", "test", "", false, false)
-
-	client.AddTracksToPlaylist(context.Background(), res.ID, track.ID)
+func createPlayListBasedOnYear(client *spotify.Client, trackIDs []spotify.ID, year string) {
+	res, err := client.CreatePlaylistForUser(context.Background(), "12153283982", fmt.Sprintf("RohitKatyal-Liked-%s", year), "", false, false)
+	if err != nil {
+		print(err.Error())
+	}
+	print(res.ID)
+	_, err = client.AddTracksToPlaylist(context.Background(), res.ID, trackIDs...)
 	if err != nil {
 		print(err.Error())
 	}

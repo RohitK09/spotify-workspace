@@ -23,11 +23,11 @@ import (
 // redirectURI is the OAuth redirect URI for the application.
 // You must register an application at Spotify's developer portal
 // and enter this value.
-const redirectURI = "https://rohitk09-ominous-fortnight-pxrpv57pp37995-8080.preview.app.github.dev/callback"
+const redirectURI = "<redirect-uri>"
 
 var (
 	auth = spotifyauth.New(spotifyauth.WithRedirectURL(redirectURI), spotifyauth.WithScopes(spotifyauth.ScopeUserLibraryRead, spotifyauth.ScopePlaylistModifyPrivate, spotifyauth.ScopePlaylistReadPrivate),
-		spotifyauth.WithClientID("e4c1c75083a246c8ba25251748f6f392"), spotifyauth.WithClientSecret("86e63ed00e414b91b11e26eafdb8657f"))
+		spotifyauth.WithClientID("client_id"), spotifyauth.WithClientSecret("client_secret"))
 	ch       = make(chan *spotify.Client)
 	state    = "abc123"
 	maxLimit = 50
